@@ -88,6 +88,7 @@ int main(int argc, char *argv[]) {
     }
 
     /* Create socket and connect to server */
+#define SOCK_NONBLOCK 0
     int sockfd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
     if (sockfd < 0) {
         perror( "socket creation failed");
@@ -138,8 +139,8 @@ int main(int argc, char *argv[]) {
                         if (poll_ev[i].fd == -1) {
                             struct sockaddr_in cl_addr;
                             uint len = sizeof(addr);
-                            set_poll(poll_ev[i], accept4(sockfd, (struct sockaddr*)&cl_addr, &len, SOCK_NONBLOCK));
-//                            set_poll(poll_ev[i], accept(sockfd, (struct sockaddr*)&cl_addr, &len));
+//                            set_poll(poll_ev[i], accept4(sockfd, (struct sockaddr*)&cl_addr, &len, SOCK_NONBLOCK));
+                            set_poll(poll_ev[i], accept(sockfd, (struct sockaddr*)&cl_addr, &len));
                             if (poll_ev[i].fd < 0) {
                                 clear_poll(poll_ev[i]);
                                 perror("Accept failed: ");
@@ -301,6 +302,7 @@ int main(int argc, char *argv[]) {
                         clear_poll(poll_ev[poll_pos]);
                         clear_ctx(get_ctx(ctxs,poll_pos));
                     }
+#define POLLRDHUP 0
                     if (poll_ev[poll_pos].revents & POLLRDHUP) {
                         printf("Event(POLLRDHUP) for connection %d: %02x\n", poll_pos, poll_ev[poll_pos].revents);
                         if (get_ctx(ctxs,poll_pos).ssl != NULL) {
