@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.10)
 project(OpenSSLTest)
 
-set(CMAKE_VERBOSE_MAKEFILE ON)
+set(CMAKE_VERBOSE_MAKEFILE OFF)
 option(SSLSERVER_BUILD "Enable building sslserver" ON)
 option(SSLCLIENT_BUILD "Enable building sslclient" ON)
 

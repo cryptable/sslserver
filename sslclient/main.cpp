@@ -173,11 +173,11 @@ int main(int argc, char *argv[]) {
     }
     if (ssl_client_support) {
         SSL_CTX_set_default_passwd_cb(ssl_ctx_1way, pem_passwd_cb);
-        if (!SSL_CTX_use_certificate_chain_file(ssl_ctx_1way, "../client_chain.pem")) {
+        if (!SSL_CTX_use_certificate_chain_file(ssl_ctx_1way, "../../sslclient/client_chain.pem")) {
             perror("SSL_CTX_use_certificate_chain_file 1way failed");
             exit(EXIT_FAILURE);
         }
-        if (!SSL_CTX_use_PrivateKey_file(ssl_ctx_1way, "../client_key.pem", SSL_FILETYPE_PEM)) {
+        if (!SSL_CTX_use_PrivateKey_file(ssl_ctx_1way, "../../sslclient/client_key.pem", SSL_FILETYPE_PEM)) {
             printf("SSLError [%s]\n", ERR_error_string(ERR_get_error(), NULL));
             perror("SSL_CTX_use_PrivateKey_file 1way failed");
             exit(EXIT_FAILURE);

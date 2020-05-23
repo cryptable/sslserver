@@ -27,9 +27,23 @@ struct context {
 #define clear_ctx( p ) memset(&(p), 0, sizeof(context))
 #define get_ctx( c, p ) (c)[(p-1)]
 
-int verify_callback(int ok, X509_STORE_CTX *ctx) {
+int verify_callback(int preverify_ok, X509_STORE_CTX *ctx) {
+    char    buf[256];
+    X509   *current_cert;
+    int     err, depth;
+    SSL    *ssl;
 
-    return 1;
+    printf("preverify = %d\n", preverify_ok);
+
+    current_cert = X509_STORE_CTX_get_current_cert(ctx);
+    err = X509_STORE_CTX_get_error(ctx);
+    depth = X509_STORE_CTX_get_error_depth(ctx);
+
+    ssl = (SSL *)X509_STORE_CTX_get_ex_data(ctx, SSL_get_ex_data_X509_STORE_CTX_idx());
+    X509_NAME_oneline(X509_get_subject_name(current_cert), buf, 256);
+    printf("verify error:num=%d:%s:depth=%d:%s\n", err, X509_verify_cert_error_string(err), depth, buf);
+
+    return preverify_ok;
 }
 
 #define PASSWORD "system"
@@ -46,7 +60,8 @@ int tlsext_servername_callback(SSL *ssl, int *al, void *arg) {
     const char *servername = SSL_get_servername(ssl, TLSEXT_NAMETYPE_host_name);
 
     if (strncasecmp(servername, MUTUALSSL_DOMAIN, sizeof(MUTUALSSL_DOMAIN)) == 0) {
-        SSL_set_verify(ssl, SSL_VERIFY_PEER, verify_callback);
+        SSL_set_verify(ssl, SSL_VERIFY_PEER | SSL_VERIFY_CLIENT_ONCE, verify_callback);
+        SSL_set_verify_depth(ssl,0);
     }
     else if (strncasecmp(servername, SERVERSSL_DOMAIN, sizeof(MUTUALSSL_DOMAIN)) != 0) {
         return SSL_TLSEXT_ERR_NOACK;
@@ -69,13 +84,13 @@ int main(int argc, char *argv[]) {
         perror("SSL_CTX_set_min_proto_version failed");
         exit(EXIT_FAILURE);
     }
-    SSL_CTX_set_default_passwd_cb(ssl_ctx_1way, pem_passwd_cb);
 
-    if (!SSL_CTX_use_certificate_chain_file(ssl_ctx_1way, "../localhost_chain.pem")) {
+    SSL_CTX_set_default_passwd_cb(ssl_ctx_1way, pem_passwd_cb);
+    if (!SSL_CTX_use_certificate_chain_file(ssl_ctx_1way, "../../sslserver/localhost_chain.pem")) {
         perror("SSL_CTX_use_certificate_chain_file 1way failed");
         exit(EXIT_FAILURE);
     }
-    if (!SSL_CTX_use_PrivateKey_file(ssl_ctx_1way, "../localhost_key.pem", SSL_FILETYPE_PEM)) {
+    if (!SSL_CTX_use_PrivateKey_file(ssl_ctx_1way, "../../sslserver/localhost_key.pem", SSL_FILETYPE_PEM)) {
         printf("SSLError [%s]\n", ERR_error_string(ERR_get_error(), NULL));
         perror("SSL_CTX_use_PrivateKey_file 1way failed");
         exit(EXIT_FAILURE);
@@ -87,8 +102,11 @@ int main(int argc, char *argv[]) {
         exit(EXIT_FAILURE);
     }
 
+    // Set trusted CA list
+    SSL_CTX_set_default_verify_file(ssl_ctx_1way);
+    SSL_CTX_load_verify_locations(ssl_ctx_1way, "../../sslserver/trustlist.pem", NULL);
+
     /* Create socket and connect to server */
-#define SOCK_NONBLOCK 0
     int sockfd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
     if (sockfd < 0) {
         perror( "socket creation failed");
@@ -119,8 +137,6 @@ int main(int argc, char *argv[]) {
         clear_ctx( get_ctx( ctxs, i ) );
     }
 
-
-
     while(1) {
         int nbr_el = poll(poll_ev, MAX_LISTEN+1, 100);
         if (nbr_el < 0) {
@@ -139,8 +155,8 @@ int main(int argc, char *argv[]) {
                         if (poll_ev[i].fd == -1) {
                             struct sockaddr_in cl_addr;
                             uint len = sizeof(addr);
-//                            set_poll(poll_ev[i], accept4(sockfd, (struct sockaddr*)&cl_addr, &len, SOCK_NONBLOCK));
-                            set_poll(poll_ev[i], accept(sockfd, (struct sockaddr*)&cl_addr, &len));
+                            set_poll(poll_ev[i], accept4(sockfd, (struct sockaddr*)&cl_addr, &len, SOCK_NONBLOCK));
+//                            set_poll(poll_ev[i], accept(sockfd, (struct sockaddr*)&cl_addr, &len));
                             if (poll_ev[i].fd < 0) {
                                 clear_poll(poll_ev[i]);
                                 perror("Accept failed: ");
@@ -153,47 +169,48 @@ int main(int argc, char *argv[]) {
                             sprintf(get_ctx(ctxs,i).out_buf, "Send data through channel %d\n", i);
                             get_ctx(ctxs,i).out_buf_lg = strlen(get_ctx(ctxs,i).out_buf);
 
-                            // One way SSL
-                            if (i%2 == 1) {
-                                SSL *ssl = SSL_new(ssl_ctx_1way);
-                                if (!SSL_set_fd(ssl, poll_ev[i].fd)) {
-                                    printf("SSLError [%s]\n", ERR_error_string(ERR_get_error(), NULL));
-                                    perror("SSL_set_fd failed: ");
-                                    close(poll_ev[i].fd);
-                                    SSL_free(ssl);
-                                    clear_poll(poll_ev[i]);
-                                    clear_ctx(get_ctx(ctxs,i));
-                                    break;
-                                }
-
-                                do {
-                                    ret = SSL_accept(ssl);
-                                } while ((ret <= 0) &&
-                                         ((SSL_get_error(ssl, ret) == SSL_ERROR_WANT_WRITE) ||
-                                          (SSL_get_error(ssl, ret) == SSL_ERROR_WANT_READ)));
-                                if (ret <= 0) {
-                                    printf("SSLError [%s]\n", ERR_error_string(ERR_get_error(), NULL));
-                                    perror("SSL Accept failed: ");
-                                    close(poll_ev[i].fd);
-                                    SSL_free(ssl);
-                                    clear_poll(poll_ev[i]);
-                                    clear_ctx(get_ctx(ctxs,i));
-                                    break;
-                                }
-
-                                // Get hostname SNI
-                                printf("Connected to host: %s\n", SSL_get_servername(ssl, TLSEXT_NAMETYPE_host_name));
-                                X509 *x509 = SSL_get_peer_certificate(ssl);
-                                if (x509 != NULL) {
-                                    char name_buffer[1024];
-                                    printf("Certificate connected: %s\n", X509_NAME_oneline(X509_get_subject_name(x509), name_buffer, sizeof(name_buffer)-1));
-                                }
-
-                                // Set non blocking
-                                BIO_set_nbio(SSL_get_rbio(ssl), 1);
-                                BIO_set_nbio(SSL_get_wbio(ssl), 1);
-                                get_ctx(ctxs,i).ssl = ssl;
+                            // Always SSL (no clear anymore)
+                            SSL *ssl = SSL_new(ssl_ctx_1way);
+                            if (!SSL_set_fd(ssl, poll_ev[i].fd)) {
+                                printf("SSLError [%s]\n", ERR_error_string(ERR_get_error(), NULL));
+                                perror("SSL_set_fd failed: ");
+                                close(poll_ev[i].fd);
+                                SSL_free(ssl);
+                                clear_poll(poll_ev[i]);
+                                clear_ctx(get_ctx(ctxs,i));
+                                break;
                             }
+
+                            do {
+                                ret = SSL_accept(ssl);
+                            } while ((ret <= 0) &&
+                                     ((SSL_get_error(ssl, ret) == SSL_ERROR_WANT_WRITE) ||
+                                      (SSL_get_error(ssl, ret) == SSL_ERROR_WANT_READ)));
+                            if (ret <= 0) {
+                                printf("SSLError [%s]\n", ERR_error_string(ERR_get_error(), NULL));
+                                perror("SSL Accept failed: ");
+                                close(poll_ev[i].fd);
+                                SSL_free(ssl);
+                                clear_poll(poll_ev[i]);
+                                clear_ctx(get_ctx(ctxs,i));
+                                break;
+                            }
+
+                            // Set trusted CA list
+                            SSL_set_client_CA_list(ssl, SSL_load_client_CA_file("../../sslserver/trustlist.pem"));
+
+                            // Get hostname SNI
+                            printf("Connected to host: %s\n", SSL_get_servername(ssl, TLSEXT_NAMETYPE_host_name));
+                            X509 *x509 = SSL_get_peer_certificate(ssl);
+                            if (x509 != NULL) {
+                                char name_buffer[1024];
+                                printf("Certificate connected: %s\n", X509_NAME_oneline(X509_get_subject_name(x509), name_buffer, sizeof(name_buffer)-1));
+                            }
+
+                            // Set non blocking
+                            BIO_set_nbio(SSL_get_rbio(ssl), 1);
+                            BIO_set_nbio(SSL_get_wbio(ssl), 1);
+                            get_ctx(ctxs,i).ssl = ssl;
                             break;
                         }
                     }
@@ -212,7 +229,7 @@ int main(int argc, char *argv[]) {
                                 }
                                 else {
                                     if (SSL_get_error(get_ctx(ctxs, poll_pos).ssl, bytes) == SSL_ERROR_WANT_READ) {
-                                        printf("Received %d: %s", poll_pos, get_ctx(ctxs, poll_pos).in_buf);
+//                                        printf("Received %d: %s", poll_pos, get_ctx(ctxs, poll_pos).in_buf);
                                         poll_ev[poll_pos].events = POLLOUT;
                                         break;
                                     }
@@ -263,7 +280,7 @@ int main(int argc, char *argv[]) {
                                         break;
                                     }
                                 }
-                                printf("Send %d: %s", poll_pos, get_ctx(ctxs, poll_pos).out_buf);
+//                                printf("Send %d: %s", poll_pos, get_ctx(ctxs, poll_pos).out_buf);
                                 poll_ev[poll_pos].events = POLLIN;
                                 get_ctx(ctxs, poll_pos).in_buf_lg = 0;
 
@@ -302,7 +319,6 @@ int main(int argc, char *argv[]) {
                         clear_poll(poll_ev[poll_pos]);
                         clear_ctx(get_ctx(ctxs,poll_pos));
                     }
-#define POLLRDHUP 0
                     if (poll_ev[poll_pos].revents & POLLRDHUP) {
                         printf("Event(POLLRDHUP) for connection %d: %02x\n", poll_pos, poll_ev[poll_pos].revents);
                         if (get_ctx(ctxs,poll_pos).ssl != NULL) {
