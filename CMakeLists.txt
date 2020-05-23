@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.10)
-project(OpenSSLTest)
+project(SSLServerTest)
+
+set(ORGANIZATION_NAME "Cryptable BVBA")
 
 set(CMAKE_VERBOSE_MAKEFILE OFF)
 option(SSLSERVER_BUILD "Enable building sslserver" ON)
@@ -20,7 +22,7 @@ get_filename_component(COMMON_LIB "${COMMON_ROOT}/lib" ABSOLUTE)
 message(STATUS "Common Root: ${COMMON_ROOT}")
 
 if(SSLSERVER_BUILD)
-    add_subdirectory(sslserver)
+    add_subdirectory(sslserver-poll)
 endif()
 if(SSLCLIENT_BUILD)
     add_subdirectory(sslclient)

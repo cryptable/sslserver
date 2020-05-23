@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(sslserver)
+project(sslserver-poll)
 
 set(CMAKE_CXX_STANDARD 14)
 
@@ -13,5 +13,9 @@ endif()
 
 include_directories(${COMMON_INCLUDE})
 
-add_executable(sslserver main.cpp)
-target_link_libraries(sslserver ${OPENSSL_LIBRARIES})
+add_executable(sslserver-poll src/main.cpp
+        src/TinyConnection.cpp src/TinyConnection.h
+        src/TinyServerSocket.cpp src/TinyServerSocket.h
+        src/TinyHandler.h
+        src/TinyMutex.cpp src/TinyMutex.h)
+target_link_libraries(sslserver-poll ${OPENSSL_LIBRARIES} pthread)
