@@ -11,7 +11,7 @@
 #include <string>
 #include <atomic>
 
-// #define TIMING 1
+#define TINY_TIMING 1
 
 class TinyTimer {
 

@@ -30,6 +30,13 @@ TinyServerSocket::TinyServerSocket(const std::string ip, int port) {
         throw system_error(error_code(errno, system_category()));
     }
 
+    // SO_REUSEPORT: For TCP sockets, this option allows accept(2) load distribu‐
+    //              tion in a multi-threaded server to be improved by using a dis‐
+    //              tinct listener socket for each thread.
+    //              This allows multiple sslserver-poll to bind to the same port.
+    int optval = 1;
+    setsockopt(listenfd, SOL_SOCKET, SO_REUSEPORT, &optval, sizeof(optval));
+
     struct sockaddr_in addr;
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
@@ -53,7 +60,7 @@ TinyServerSocket::TinyServerSocket(const std::string ip, int port) {
 void TinyServerSocket::start_polling() {
     int ctr = 0;
     while(1) {
-        int nbr_el = poll(fds, MAX_FDS, 10);
+        int nbr_el = poll(fds, MAX_FDS, 50);
         if (nbr_el < 0) {
             char err_msg[128] = {0};
             throw system_error(error_code(errno, system_category()));
