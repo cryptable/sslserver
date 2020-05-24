@@ -8,6 +8,7 @@
 #include "TinyMutex.h"
 #include <pthread.h>
 
+#ifdef TINY_MUTEX
 class HelperTinyMutex {
 
 public:
@@ -35,11 +36,16 @@ private:
 
     pthread_mutex_t mutex;
 };
+#endif // TINY_MUTEX
 
 TinyMutex::TinyMutex() {
+#ifdef TINY_MUTEX
     HelperTinyMutex::getInstance().lock();
+#endif // TINY_MUTEX
 }
 
 TinyMutex::~TinyMutex() {
+#ifdef TINY_MUTEX
     HelperTinyMutex::getInstance().unlock();
+#endif // TINY_MUTEX
 }

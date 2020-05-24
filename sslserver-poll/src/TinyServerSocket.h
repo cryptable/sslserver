@@ -13,7 +13,7 @@
 #include "TinyConnection.h"
 
 // TODO: Re-evaluation of relation between MAX_LISTEN<->MAX-FDS and maximum connections
-#define WORKER_FDS      3000
+#define WORKER_FDS      500
 #define MAX_LISTEN      3000
 #define MAX_FDS         WORKER_FDS + 1
 

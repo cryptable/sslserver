@@ -60,7 +60,7 @@ TinyServerSocket::TinyServerSocket(const std::string ip, int port) {
 void TinyServerSocket::start_polling() {
     int ctr = 0;
     while(1) {
-        int nbr_el = poll(fds, MAX_FDS, 50);
+        int nbr_el = poll(fds, MAX_FDS, 10);
         if (nbr_el < 0) {
             char err_msg[128] = {0};
             throw system_error(error_code(errno, system_category()));

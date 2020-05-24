@@ -8,7 +8,8 @@ The code is POC, the socket implementation will have multiple try-outs:
 - OpenSSL BIO : Why have multiple socket abstractions.  (TODO)
 - Boost Asio
 
-The goal is to write a server which is small and capable to handle above 5k connections.
+The goal is to write a server which is small and capable to handle above 5k connections. I didn't succeed it with 
+boost::asio, so I want to start digging into this matter.
 
 ##Usage for developemnt
 - cmake
@@ -33,10 +34,16 @@ docker run -d --cap-add sys_ptrace -p127.0.0.1:2222:22 --name clion_remote_env c
 ```
 
 ##Methods of IO
-There are some metdods to do IO and the first version of this POC is using poll(). Next we try to use epoll() on linux and lastly we will use kqueue to run this on MacOSX.
+There are some methods to do IO and the first version of this POC is using poll(). Next we try to use epoll() on linux and lastly we will use kqueue to run this on MacOSX.
 
 ## Using poll()
-This is supported on all UNIX like systems as long as you don't use the special extensions.
+This is supported on all UNIX like systems as long as you don't use the special extensions. Though I am using some 
+extensions. The max number of connections I can handle use computer is around 1000 per thread. I'm not convinced yet, 
+because I see in the timings that the number connections don't go up to 1000, which means poll() is not giving me all 
+the connection or gatling perf-test is not working as it should. I run everything on 1 PC.
+Running 5 servers, I reach 5000 connections with a loss of less 1% due to timeouts. 
+
+## Using epoll()
 
 ##Use io_uring
 

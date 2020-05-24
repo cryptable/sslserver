@@ -9,6 +9,8 @@
 #define SSLSERVERTEST_TINYMUTEX_H
 #include <pthread.h>
 
+#define TINY_MUTEX  1
+
 class TinyMutex {
 
 public:
