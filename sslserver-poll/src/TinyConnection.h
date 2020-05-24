@@ -8,6 +8,7 @@
 #ifndef SSLSERVERTEST_TINYCONNECTION_H
 #define SSLSERVERTEST_TINYCONNECTION_H
 #include "TinyHandler.h"
+#include "TinyTimer.h"
 #include <poll.h>
 #include <chrono>
 
@@ -86,6 +87,10 @@ private:
      */
     void write_data();
 
+    /**
+     * Timer
+     */
+     TinyTimer tinyTimer;
 };
 
 

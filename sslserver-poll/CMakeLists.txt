@@ -17,5 +17,6 @@ add_executable(sslserver-poll src/main.cpp
         src/TinyConnection.cpp src/TinyConnection.h
         src/TinyServerSocket.cpp src/TinyServerSocket.h
         src/TinyHandler.h
-        src/TinyMutex.cpp src/TinyMutex.h)
+        src/TinyMutex.cpp src/TinyMutex.h
+        src/TinyTimer.cpp src/TinyTimer.h)
 target_link_libraries(sslserver-poll ${OPENSSL_LIBRARIES} pthread)

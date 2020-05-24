@@ -24,10 +24,12 @@
 
 using namespace std;
 
-TinyConnection::TinyConnection() {
+TinyConnection::TinyConnection():
+        tinyTimer("TinyConnection")
+{
     // Set state to closing connection
     this->state = CLOSED;
-    //
+    // Set timeout for actions to release open resources
     this->timeout = DEFAULT_TIMEOUT;
 }
 
@@ -36,29 +38,30 @@ void TinyConnection::setFD(struct pollfd *fd, int *busy_ctr) {
     this->busy_ctr = busy_ctr;
     this->state = OPEN;
     this->start = std::chrono::steady_clock::now();
+    tinyTimer.start("accept");
 }
 
 void TinyConnection::handle() {
     if (fd->revents & POLLERR) {
-        // printf("%d:Error\n", fd->fd);
         int error = 0;
         socklen_t errlen = sizeof(error);
         int err = getsockopt(this->fd->fd, SOL_SOCKET, SO_ERROR, (void *)&error, &errlen);
         cout << "Polling error (" << error << ")\n";
         close_connection();
     } else if (fd->revents & POLLRDHUP) {
-        // printf("%d:Peer Hung Up\n", fd->fd);
         int error = 0;
         socklen_t errlen = sizeof(error);
         int err = getsockopt(this->fd->fd, SOL_SOCKET, SO_ERROR, (void *)&error, &errlen);
         cout << "Peer hungup (" << error << ")\n";
         close_connection();
     } else if ((fd->revents & POLLIN) || (this->state == READING)) {
-        // printf("%d:Reading\n", fd->fd);
+        tinyTimer.start("begin read");
         read_handle_data();
+        tinyTimer.tick("end read");
     } else if ((fd->revents & POLLOUT) || (this->state == WRITING)) {
-        // printf("%d:Writing\n", fd->fd);
+        tinyTimer.tick("begin write");
         write_data();
+        tinyTimer.tick("end write");
     } else if ((fd->revents == 0) && (this->state == OPEN)) {
         std::chrono::duration<double> elapsed_seconds = std::chrono::steady_clock::now() - this->start;
         if (elapsed_seconds.count() > this->timeout) {
@@ -124,6 +127,7 @@ void TinyConnection::close_connection() {
         this->state = CLOSED;
     }
     this->tinyHandler.clear();
+    tinyTimer.stop("close");
 }
 
 bool TinyConnection::busy() {
