@@ -13,8 +13,8 @@
 #include "TinyConnection.h"
 
 // TODO: Re-evaluation of relation between MAX_LISTEN<->MAX-FDS and maximum connections
-#define WORKER_FDS      500
-#define MAX_LISTEN      3000
+#define WORKER_FDS      5000
+#define MAX_LISTEN      5000
 #define MAX_FDS         WORKER_FDS + 1
 
 #define clear_poll( p ) (p).fd = -1;  (p).events = 0; (p).revents = 0;

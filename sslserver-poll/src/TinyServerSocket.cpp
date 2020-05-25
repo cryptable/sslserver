@@ -93,19 +93,22 @@ void TinyServerSocket::accept_connection() {
     uint len = sizeof(cl_addr);
 
     // 0 is always occupied, this is the listen fds of the server.
+    // TODO: optimilize loop, maybe queue which TinyConnect tells they are done
     for (int i=1; i<MAX_FDS; i++) {
         if (fds[i].fd == -1) {
             {
                 TinyMutex tinyMutex;
                 set_poll(fds[i], accept4(fds[LISTEN_FD].fd, (struct sockaddr*)&cl_addr, &len, SOCK_NONBLOCK));
                 if (fds[i].fd < 0) {
+                    if ((errno == EAGAIN) || (errno == EWOULDBLOCK)) {
+                        break;
+                    }
                     char err_msg[128] = {0};
                     throw system_error(error_code(errno, system_category()));
                 }
                 connections[i-1].setFD(&(fds[i]), &busy_ctr);
                 busy_ctr++;
             }
-            break;
         }
     }
 }
