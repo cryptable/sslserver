@@ -77,8 +77,7 @@ private:
     TinyHandler tinyHandler;
 
     /**
-     * Read all data and handle it
-     * TODO: refactor to event driver (see function)
+     * Read some data and handle it if all is read
      */
     void read_handle_data();
 
