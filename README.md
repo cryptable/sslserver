@@ -33,6 +33,8 @@ docker build -t clion/remote-cpp-env:0.2 -f Dockerfile.remote-cpp-env .
 docker run -d --cap-add sys_ptrace -p127.0.0.1:2222:22 --name clion_remote_env clion/remote-cpp-env:0.2
 ```
 
+In the docker plugin, you have to config as '--cap-add=SYS_PTRACE'
+
 ##Methods of IO
 There are some methods to do IO and the first version of this POC is using poll(). Next we try to use epoll() on linux and lastly we will use kqueue to run this on MacOSX.
 

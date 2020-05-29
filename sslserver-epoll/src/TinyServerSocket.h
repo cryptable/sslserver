@@ -8,16 +8,13 @@
 #ifndef SSLSERVERTEST_TINYSERVERSOCKET_H
 #define SSLSERVERTEST_TINYSERVERSOCKET_H
 
-#include <poll.h>
+#include <sys/epoll.h>
 #include <vector>
 #include "TinyConnection.h"
 
 #define WORKER_FDS      5000
 #define MAX_LISTEN      5000
 #define MAX_FDS         WORKER_FDS + 1
-
-#define clear_poll( p ) (p).fd = -1;  (p).events = 0; (p).revents = 0;
-#define set_poll( p, b ) (p).fd = (b);  (p).events = POLLIN; (p).revents = 0;
 
 /**
  * This class represents the server socket to be created for a port to listen to. It is the whole server.
@@ -50,15 +47,24 @@ private:
     void accept_connection();
 
     /**
-     * All the file descriptors to be polled. fds[0] is the server listen file descriptor
-     * The +1 stands for the server listen socket
+     * All the file descriptors to be polled.
      */
-    struct pollfd fds[MAX_FDS];
+    struct epoll_event fds[MAX_FDS];
 
     /**
      * All the predefined connection to be handled
      */
-    TinyConnection connections[MAX_LISTEN];
+    TinyConnection connections[MAX_FDS];
+
+    /**
+     * Polling File descriptor for epoll
+    */
+    int epollfd;
+
+    /**
+     * Listen socken File descriptor for epoll
+    */
+    int listenfd;
 
     /**
      * Show how many connections are busy processing

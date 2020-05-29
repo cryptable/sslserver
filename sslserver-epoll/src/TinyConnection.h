@@ -28,12 +28,12 @@ public:
      * Set the file descriptor so the connection can handle it
      * @param fd
      */
-    void setFD(struct pollfd *fd, int *busy_ctr);
+    void setFD(int fd, int epollfd, int *busy_ctr);
 
     /**
      * Handle the requested action according to polling state
      */
-    void handle();
+    void handle(struct epoll_event *event);
 
     /**
      * Busy reading data
@@ -43,13 +43,18 @@ public:
     /**
      * Close the connection, clear the handler of any data
      */
-    void close_connection();
+    void close_connection(struct epoll_event *event);
 
 private:
     /**
-     * Pointer to the file descriptor
+     * My file descriptor
      */
-    struct pollfd *fd;
+    int fd;
+
+    /**
+     * The polling file descriptor
+     */
+    int epollfd;
 
     /*
      * Pointer to the server busy counter
@@ -79,12 +84,12 @@ private:
     /**
      * Read some data and handle it if all is read
      */
-    void read_handle_data();
+    void read_handle_data(struct epoll_event *event);
 
     /**
      * Write a block of data until finished
      */
-    void write_data();
+    void write_data(struct epoll_event *event);
 
     /**
      * Timer

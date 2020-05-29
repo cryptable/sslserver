@@ -13,6 +13,7 @@
 #include <iostream>
 #include <unistd.h>
 #include <csignal>
+#include <cstring>
 
 using namespace std;
 
@@ -20,11 +21,15 @@ using namespace std;
 
 TinyServerSocket::TinyServerSocket(const std::string ip, int port) {
 
-    for(int i=0; i<MAX_FDS; i++) {
-        clear_poll(fds[i]);
+    memset(fds, 0, sizeof(fds));
+
+    epollfd = epoll_create1(0);
+    if (epollfd == -1) {
+        char err_msg[128] = {0};
+        throw system_error(error_code(errno, system_category()));
     }
 
-    int listenfd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
+    listenfd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
     if (listenfd < 0) {
         char err_msg[128] = {0};
         throw system_error(error_code(errno, system_category()));
@@ -52,7 +57,14 @@ TinyServerSocket::TinyServerSocket(const std::string ip, int port) {
         throw system_error(error_code(errno, system_category()));
     }
 
-    set_poll(fds[LISTEN_FD], listenfd);
+    struct epoll_event epoll_event;
+    epoll_event.events = EPOLLIN | EPOLLET;
+    epoll_event.data.fd = listenfd;
+    if (epoll_ctl(epollfd, EPOLL_CTL_ADD, listenfd, &epoll_event) == -1) {
+        char err_msg[128] = {0};
+        throw system_error(error_code(errno, system_category()));
+    }
+
     busy_ctr = 0;
     start_polling();
 }
@@ -60,29 +72,20 @@ TinyServerSocket::TinyServerSocket(const std::string ip, int port) {
 void TinyServerSocket::start_polling() {
     int ctr = 0;
     while(1) {
-        int nbr_el = poll(fds, MAX_FDS, 10);
+        int nbr_el = epoll_wait(epollfd, fds, MAX_FDS, 10);
         if (nbr_el < 0) {
             char err_msg[128] = {0};
             throw system_error(error_code(errno, system_category()));
         }
-        int poll_pos = 0;
-        for (int poll_pos=0, busy_el= busy_ctr; (poll_pos<MAX_LISTEN) && ((nbr_el>0) || (busy_el>0)); poll_pos++) {
+        for (int poll_pos=0; poll_pos<nbr_el; poll_pos++) {
             // Doing state changes in the event polling
-            if (fds[poll_pos].revents != 0) {
-                if (poll_pos == LISTEN_FD) {
-//                    cout << ctr++ << "\n";
-                    accept_connection();
-                }
-                else {
-                    connections[poll_pos-1].handle();
-                    busy_el--;
-                }
-                nbr_el--;
+            if (fds[poll_pos].data.fd == listenfd) {
+//                cout << ctr++ << "\n";
+                accept_connection();
+
             }
-            // Doing unfished business
-            else if ((poll_pos > 0) && connections[poll_pos-1].busy()) {
-                connections[poll_pos-1].handle();
-                busy_el--;
+            else {
+                reinterpret_cast<TinyConnection *>(fds[poll_pos].data.ptr)->handle(&(fds[poll_pos]));
             }
         }
     }
@@ -92,39 +95,35 @@ void TinyServerSocket::accept_connection() {
     struct sockaddr_in cl_addr;
     uint len = sizeof(cl_addr);
 
-    // 0 is always occupied, this is the listen fds of the server.
-    // TODO: optimilize loop, maybe queue which TinyConnect tells they are done
-    for (int i=1; i<MAX_FDS; i++) {
-        if (fds[i].fd == -1) {
-            {
-                TinyMutex tinyMutex;
-                set_poll(fds[i], accept4(fds[LISTEN_FD].fd, (struct sockaddr*)&cl_addr, &len, SOCK_NONBLOCK));
-                if (fds[i].fd < 0) {
-                    if ((errno == EAGAIN) || (errno == EWOULDBLOCK)) {
-                        break;
-                    }
-                    char err_msg[128] = {0};
-                    throw system_error(error_code(errno, system_category()));
+
+    for (int i=0; i<MAX_FDS; i++)
+    {
+        if (!connections[i].busy()) {
+            TinyMutex tinyMutex;
+            int connfd = accept4(listenfd, (struct sockaddr*)&cl_addr, &len, SOCK_NONBLOCK);
+            if (connfd < 0) {
+                if ((errno == EAGAIN) || (errno == EWOULDBLOCK)) {
+                    return;
                 }
-                connections[i-1].setFD(&(fds[i]), &busy_ctr);
-                busy_ctr++;
+                char err_msg[128] = {0};
+                throw system_error(error_code(errno, system_category()));
             }
+//        setnonblocking(connfd);
+            connections[i].setFD(connfd, epollfd, &busy_ctr);
+            struct epoll_event ev;
+            ev.events = EPOLLIN | EPOLLET;
+            ev.data.ptr = reinterpret_cast<void *>(&(connections[i]));
+            if (epoll_ctl(epollfd, EPOLL_CTL_ADD, connfd, &ev) == -1) {
+                char err_msg[128] = {0};
+                throw system_error(error_code(errno, system_category()));
+            }
+
+            busy_ctr++;
         }
     }
 }
 
 TinyServerSocket::~TinyServerSocket() {
 
-    for (int i=1; i<MAX_FDS; i++) {
-        if (fds[i].fd == -1) {
-            if (connections[i - 1].busy()) {
-                connections[i - 1].close_connection();
-            }
-        }
-    }
-
-    if (fds[0].fd != -1)
-        close(fds[0].fd);
-
-    clear_poll(fds[0]);
+// TODO: closing the connection
 }
